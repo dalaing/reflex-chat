@@ -1,0 +1,60 @@
+name:                frontend
+version:             0.1.0.0
+-- synopsis:            
+-- description:         
+license:             BSD3
+license-file:        LICENSE
+author:              Dave Laing
+maintainer:          dave.laing.80@gmail.com
+-- copyright:           
+-- category:            
+build-type:          Simple
+extra-source-files:  ChangeLog.md
+cabal-version:       >=1.10
+
+library
+  exposed-modules:     ChatWidget
+  if !impl(ghcjs -any)
+    exposed-modules:   Util.Run
+  build-depends:       base >=4.9 && <4.10
+                     , mtl
+                     , containers
+                     , text
+                     , lens
+                     , reflex
+                     , reflex-dom-core
+                     , servant
+                     , servant-reflex
+                     , common
+  if !impl(ghcjs -any)
+    build-depends:
+        filepath >=1.4 && <1.5
+      , directory >=1.3 && <1.4
+      , jsaddle
+      , jsaddle-warp
+      , wai >= 3.2 && < 3.3
+      , warp
+      , wai-middleware-static
+      , websockets
+  if impl(ghcjs -any)
+    ghc-options:       -Wall -dedupe
+    cpp-options:       -DGHCJS_BROWSER
+  else
+    ghc-options:       -Wall
+  hs-source-dirs:      src
+  default-language:    Haskell2010
+
+executable frontend
+  if !impl(ghcjs -any)
+    buildable: False
+  main-is:             Main.hs
+  build-depends:       base >=4.9 && <4.10
+                     , reflex-dom-core
+                     , frontend
+  if impl(ghcjs -any)
+    ghc-options:       -Wall -dedupe
+    cpp-options:       -DGHCJS_BROWSER
+  else
+    ghc-options:       -Wall
+  hs-source-dirs:      exe
+  default-language:    Haskell2010
