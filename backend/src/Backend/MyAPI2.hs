@@ -21,14 +21,17 @@ import Control.Monad.Fix (MonadFix)
 import System.FilePath
 
 import Servant.API
-import Servant.Server
+import Servant.Server hiding (route)
 
 import Servant.Server.Internal.ServantErr
 
 import Network.Wai
 import Network.Wai.Handler.Warp (run)
 import Network.Wai.Handler.WebSockets (websocketsApp)
+import Network.Wai.Application.Static
 import Network.WebSockets (defaultConnectionOptions)
+
+import qualified Data.ByteString as B
 
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -91,7 +94,7 @@ convertEntry (EntryIn name eMessageIn eNotificationIn eLogout) = mdo
     v <- sample . current $ dv
     let
       eTx = (\(_, MessageBody m) -> [MessageSent "" m]) <$> eMessageIn
-      eClose = (16, "Bye") <$ eLogout
+      eClose = (1000, "Bye") <$ eLogout
       wsc = WebSocketConfig eTx eClose
     ws :: WebSocket t () <- accept v wsc (void eLogout)
     pure . void $ _wsClosed ws
@@ -102,7 +105,7 @@ convertEntry (EntryIn name eMessageIn eNotificationIn eLogout) = mdo
     eMessageOut = fst <$> eMessageIn
 
     f (tag, req) =
-      case websocketsApp defaultConnectionOptions (void . forkIO . handleConnection wsm) req of
+      case websocketsApp defaultConnectionOptions (void . handleConnection wsm) req of
         Nothing -> (tag, responseServantErr err404)
         Just res -> (tag, res)
 
@@ -124,7 +127,7 @@ mkEntryIn ::
 mkEntryIn k name eMessage eNotification eLogout =
   EntryIn
     name
-    (fmap (\(tag, (_, msg)) -> (tag, msg)) . ffilter (\(_, (k', _)) -> k == k') $ eMessage)
+    (fmap (\(tag, (_, msg)) -> (tag, msg)) $ eMessage)
     (fmap (\(tag, _, req) -> (tag, req)) . ffilter (\(_, k', _) -> k == k') $ eNotification)
     (fmap fst . ffilter (\(_, k') -> k == k') $ eLogout)
 
@@ -156,8 +159,10 @@ myAPI2Network (eLoginReq :<|> eMessageReq :<|> eNotificationReq :<|> eLogoutReq)
     eLogoutResSuccess = fmap (Map.fromList . fmap (\t -> (t, Right NoContent)) . Map.elems) . switch . current . fmap (mergeMap . fmap eoLogout) $ dmEntryOut
 
   let
+    -- TODO not for actual use (leaks info)
     alreadyLoggedIn =
-      err404
+      err404 { errBody = "Already logged in" }
+
     mkLogin m c (t, n) =
       if Map.null . Map.filter (== n) . fmap eiName $ m
       then Map.singleton t (Right (UserId c))
@@ -165,8 +170,9 @@ myAPI2Network (eLoginReq :<|> eMessageReq :<|> eNotificationReq :<|> eLogoutReq)
     eLoginRes =
       mkLogin <$> current dmEntryIn <*> current dCount <@> eLoginReq
 
+    -- TODO not for actual use (leaks info)
     notLoggedIn =
-      err404
+      err404 { errBody = "Not logged in" }
 
     mkMessageFail m (t, (k, _)) =
       if Map.member k m then Nothing else Just (Map.singleton t (Left notLoggedIn))
@@ -199,4 +205,7 @@ go = do
   td <- newTicketDispenser
   let mkT = atomically $ getNextTicket td
   app <- basicHost $ serverGuest (Proxy :: Proxy MyAPI2) mkT myAPI2Network
-  run 9090 app
+  run 9090 $ \req respond -> do
+    if B.isPrefixOf "/files/" (rawPathInfo req)
+    then staticApp (defaultFileServerSettings "./") req respond
+    else app req respond

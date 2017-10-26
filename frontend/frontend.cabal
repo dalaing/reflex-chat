@@ -20,6 +20,8 @@ library
                      , mtl
                      , containers
                      , text
+                     , bytestring
+                     , binary
                      , lens
                      , reflex
                      , reflex-dom-core
