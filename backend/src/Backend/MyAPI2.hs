@@ -53,15 +53,14 @@ import Common.WebSocket.Message (Message(..))
 data EntryIn t tag =
   EntryIn {
     eiName :: UserName
-  , eiMessage :: Event t (tag, MessageBody)
+  , eiNotifications :: Event t [Message]
   , eiNotification :: Event t (tag, Request)
   , eiLogout :: Event t tag
   }
 
 data EntryOut t tag =
   EntryOut {
-    eoMessage :: Event t tag
-  , eoNotification :: Event t (tag, Response)
+    eoNotification :: Event t (tag, Response)
   , eoLogout :: Event t tag
   }
 
@@ -80,7 +79,7 @@ convertEntry ::
   ) =>
   EntryIn t tag ->
   m (EntryOut t tag)
-convertEntry (EntryIn name eMessageIn eNotificationIn eLogout) = mdo
+convertEntry (EntryIn name eNotifications eNotificationIn eLogout) = mdo
   wsm <- liftIO . atomically $ mkWsManager 100
   eWsd <- wsData wsm
   dCount <- count eWsd
@@ -93,16 +92,13 @@ convertEntry (EntryIn name eMessageIn eNotificationIn eLogout) = mdo
   dModel <- list dMap $ \dv -> do
     v <- sample . current $ dv
     let
-      eTx = (\(_, MessageBody m) -> [MessageSent "" m]) <$> eMessageIn
       eClose = (1000, "Bye") <$ eLogout
-      wsc = WebSocketConfig eTx eClose
+      wsc = WebSocketConfig eNotifications eClose
     ws :: WebSocket t () <- accept v wsc (void eLogout)
     pure . void $ _wsClosed ws
 
   let
     eRemoves = fmap Map.keys . switch . current . fmap mergeMap $ dModel
-
-    eMessageOut = fst <$> eMessageIn
 
     f (tag, req) =
       case websocketsApp defaultConnectionOptions (void . handleConnection wsm) req of
@@ -112,7 +108,7 @@ convertEntry (EntryIn name eMessageIn eNotificationIn eLogout) = mdo
     eNotificationOut =
       f <$> eNotificationIn
 
-  pure $ EntryOut eMessageOut eNotificationOut eLogout
+  pure $ EntryOut eNotificationOut eLogout
 
 mkEntryIn ::
   ( Eq k
@@ -120,20 +116,19 @@ mkEntryIn ::
   ) =>
   k ->
   UserName ->
-  Event t (tag, (k, MessageBody)) ->
+  Event t [Message] ->
   Event t (tag, k, Request) ->
   Event t (tag, k) ->
   EntryIn t tag
-mkEntryIn k name eMessage eNotification eLogout =
+mkEntryIn k name eNotifications eNotification eLogout =
   EntryIn
     name
-    (fmap (\(tag, (_, msg)) -> (tag, msg)) $ eMessage)
+    eNotifications
     (fmap (\(tag, _, req) -> (tag, req)) . ffilter (\(_, k', _) -> k == k') $ eNotification)
     (fmap fst . ffilter (\(_, k') -> k == k') $ eLogout)
 
 myAPI2Network ::
   ( Ord tag
-  , Show tag
   , Reflex t
   ) =>
   EventsIn' t tag () MyAPI2 ->
@@ -144,7 +139,7 @@ myAPI2Network (eLoginReq :<|> eMessageReq :<|> eNotificationReq :<|> eLogoutReq)
 
   dmEntryIn :: Dynamic t (Map Int (EntryIn t tag)) <- foldDyn ($) Map.empty .
           mergeWith (.) $ [
-            (\k (_, v) -> Map.insert k (mkEntryIn k v eMessageReq eNotificationReq eLogoutReq)) <$> current dCount <@> eLoginReq
+            (\k (_, v) -> Map.insert k (mkEntryIn k v eNotifications eNotificationReq eLogoutReq)) <$> current dCount <@> eLoginReq
           , flip (foldr Map.delete) <$> eRemoves
           ]
 
@@ -154,19 +149,24 @@ myAPI2Network (eLoginReq :<|> eMessageReq :<|> eNotificationReq :<|> eLogoutReq)
 
   let
     eRemoves = fmap Map.keys . switch . current . fmap (mergeMap . fmap eoLogout) $ dmEntryOut
-    eMessageResSuccess = fmap (Map.fromList . fmap (\t -> (t, Right NoContent)) . Map.elems) . switch . current . fmap (mergeMap . fmap eoMessage) $ dmEntryOut
     eNotificationResSuccess = fmap (Map.fromList . Map.elems) . switch . current . fmap (mergeMap . fmap eoNotification) $ dmEntryOut
-    eLogoutResSuccess = fmap (Map.fromList . fmap (\t -> (t, Right NoContent)) . Map.elems) . switch . current . fmap (mergeMap . fmap eoLogout) $ dmEntryOut
 
   let
     -- TODO not for actual use (leaks info)
     alreadyLoggedIn =
       err404 { errBody = "Already logged in" }
 
+    mkLoginNotification m (_, n) =
+        if Map.null . Map.filter (== n) . fmap eiName $ m
+        then Just $ LoggedIn . getUserName $ n
+        else Nothing
+    eLoginNotification =
+      fmapMaybe id (mkLoginNotification <$> current dmEntryIn <@> eLoginReq)
     mkLogin m c (t, n) =
-      if Map.null . Map.filter (== n) . fmap eiName $ m
-      then Map.singleton t (Right (UserId c))
-      else Map.singleton t (Left alreadyLoggedIn)
+      Map.singleton t $
+        if Map.null . Map.filter (== n) . fmap eiName $ m
+        then Right (UserId c)
+        else Left alreadyLoggedIn
     eLoginRes =
       mkLogin <$> current dmEntryIn <*> current dCount <@> eLoginReq
 
@@ -174,12 +174,17 @@ myAPI2Network (eLoginReq :<|> eMessageReq :<|> eNotificationReq :<|> eLogoutReq)
     notLoggedIn =
       err404 { errBody = "Not logged in" }
 
-    mkMessageFail m (t, (k, _)) =
-      if Map.member k m then Nothing else Just (Map.singleton t (Left notLoggedIn))
-    eMessageResFail =
-      fmapMaybe id (mkMessageFail <$> current dmEntryIn <@> eMessageReq)
+    mkMessageNotification m (_, (k, MessageBody msg)) =
+      (\e -> MessageSent (getUserName . eiName $ e) msg) <$> Map.lookup k m
+    eMessageNotification =
+      fmapMaybe id (mkMessageNotification <$> current dmEntryIn <@> eMessageReq)
+    mkMessageResponse m (t, (k, _)) =
+      Map.singleton t $
+        if Map.member k m
+        then Right NoContent
+        else Left notLoggedIn
     eMessageRes =
-      leftmost [eMessageResSuccess, eMessageResFail]
+      mkMessageResponse <$> current dmEntryIn <@> eMessageReq
 
     mkNotificationFail m (t, k, _) =
       if Map.member k m then Nothing else Just (Map.singleton t $ responseServantErr notLoggedIn)
@@ -188,15 +193,24 @@ myAPI2Network (eLoginReq :<|> eMessageReq :<|> eNotificationReq :<|> eLogoutReq)
     eNotificationRes =
       leftmost [eNotificationResSuccess, eNotificationResFail]
 
-    mkLogoutFail m (t, k) =
-      if Map.member k m then Nothing else Just (Map.singleton t (Left notLoggedIn))
-    eLogoutResFail =
-      fmapMaybe id (mkLogoutFail <$> current dmEntryIn <@> eLogoutReq)
+    mkLogoutNotification m (_, k) =
+      LoggedOut . getUserName . eiName <$> Map.lookup k m
+    eLogoutNotification =
+      fmapMaybe id (mkLogoutNotification <$> current dmEntryIn <@> eLogoutReq)
+    mkLogoutResponse m (t, k) =
+      Map.singleton t $
+        if Map.member k m
+        then Right NoContent
+        else Left notLoggedIn
     eLogoutRes =
-      leftmost [eLogoutResSuccess, eLogoutResFail]
+      mkLogoutResponse <$> current dmEntryIn <@> eLogoutReq
 
-  performEvent_ $ liftIO . print <$> eLoginReq
-  performEvent_ $ liftIO . print <$> eLoginRes
+    eNotifications =
+      mergeWith (++) . fmap (fmap pure) $ [
+          eLoginNotification
+        , eMessageNotification
+        , eLogoutNotification
+        ]
 
   pure $ eLoginRes :<|> eMessageRes :<|> eNotificationRes :<|> eLogoutRes
 
