@@ -77,9 +77,10 @@ convertEntry ::
   , MonadIO (Performable m)
   , MonadIO m
   ) =>
+  [String] ->
   EntryIn t tag ->
   m (EntryOut t tag)
-convertEntry (EntryIn name eNotifications eNotificationIn eLogout) = mdo
+convertEntry users (EntryIn name eNotifications eNotificationIn eLogout) = mdo
   wsm <- liftIO . atomically $ mkWsManager 100
   eWsd <- wsData wsm
   dCount <- count eWsd
@@ -89,11 +90,12 @@ convertEntry (EntryIn name eNotifications eNotificationIn eLogout) = mdo
           , flip (foldr Map.delete) <$> eRemoves
           ]
 
-  dModel <- list dMap $ \dv -> do
+  dModel <- list dMap $ \dv -> mdo
     v <- sample . current $ dv
     let
+      eTx = leftmost [eNotifications, [UserList users] <$ _wsOpen ws]
       eClose = (1000, "Bye") <$ eLogout
-      wsc = WebSocketConfig eNotifications eClose
+      wsc = WebSocketConfig eTx eClose
     ws :: WebSocket t () <- accept v wsc (void eLogout)
     pure . void $ _wsClosed ws
 
@@ -145,7 +147,8 @@ myAPI2Network (eLoginReq :<|> eMessageReq :<|> eNotificationReq :<|> eLogoutReq)
 
   dmEntryOut <- list dmEntryIn $ \dv -> do
     v <- sample . current $ dv
-    convertEntry v
+    m <- sample . current $ dmEntryIn
+    convertEntry (Map.elems . fmap (getUserName . eiName) $ m) v
 
   let
     eRemoves = fmap Map.keys . switch . current . fmap (mergeMap . fmap eoLogout) $ dmEntryOut

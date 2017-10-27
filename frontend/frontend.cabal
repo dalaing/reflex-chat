@@ -23,6 +23,8 @@ library
                      , bytestring
                      , binary
                      , lens
+                     , dependent-sum
+                     , dependent-map
                      , reflex
                      , reflex-dom-core
                      , servant

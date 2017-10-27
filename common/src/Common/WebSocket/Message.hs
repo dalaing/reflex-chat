@@ -12,6 +12,7 @@ data Message =
     LoggedIn User
   | LoggedOut User
   | MessageSent User MessageContent
+  | UserList [User]
 
 instance Binary Message where
   put (LoggedIn u) =
@@ -20,6 +21,8 @@ instance Binary Message where
     put (1 :: Word8) >> put u
   put (MessageSent u m) =
     put (2 :: Word8) >> put u >> put m
+  put (UserList us) =
+    put (3 :: Word8) >> put us
 
   get = do
     c <- get :: Get Word8
@@ -27,3 +30,5 @@ instance Binary Message where
       0 -> LoggedIn <$> get
       1 -> LoggedOut <$> get
       2 -> MessageSent <$> get <*> get
+      3 -> UserList <$> get
+      _ -> error "unknown message code in 'get :: Message'"
