@@ -5,6 +5,8 @@ module Common.WebSocket.Message (
 import Data.Word (Word8)
 import Data.Binary
 
+import Reflex.Binary
+
 type User = String
 type MessageContent = String
 
@@ -32,3 +34,6 @@ instance Binary Message where
       2 -> MessageSent <$> get <*> get
       3 -> UserList <$> get
       _ -> error "unknown message code in 'get :: Message'"
+
+instance CanEncode Message
+instance CanDecode Message

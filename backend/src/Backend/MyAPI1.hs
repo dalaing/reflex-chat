@@ -33,7 +33,6 @@ import Reflex.Basic.Host
 import Reflex.Server.Servant
 import Reflex.Server.Wai
 
-import Util.List
 import Util.Ticket
 
 import Common.Servant.API

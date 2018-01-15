@@ -4,6 +4,7 @@
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE GADTs #-}
 module Backend.MyAPI2 (
     go
   ) where
@@ -42,9 +43,7 @@ import Reflex.Basic.Host
 import Reflex.Server.Servant
 import Reflex.Server.Wai
 import Reflex.Server.WebSocket
-import Reflex.Server.WebSocket.Binary
 
-import Util.List
 import Util.Ticket
 
 import Common.Servant.API
@@ -226,3 +225,111 @@ go = do
     if B.isPrefixOf "/files/" (rawPathInfo req)
     then staticApp (defaultFileServerSettings "./") req respond
     else app req respond
+
+{-
+data Input a where
+  ILogin        :: Input UserName
+  IMessage      :: Input (UserId, MessageBody)
+  INotification :: Input (UserId, Request)
+  ILogout       :: Input (UserId, ())
+
+data ClientInput a where
+  CIMessage      :: ClientInput MessageBody
+  CINotification :: ClientInput Request
+  CILogout       :: ClientInput ()
+
+inputToClientInput ::
+  DSum Input Identity ->
+  Maybe (UserId, DSum ClientInput Identity)
+inputToClientInput i =
+  case i of
+    ILogin :=> Identity _ -> Nothing
+    IMessage :=> Identity (i, mb) -> Just (i, CIMessage :=> Identity mb)
+    INotification :=> Identity (i, r) -> Just (i, CINotification :=> Identity r)
+    ILogout :=> Identity (i, u) -> Just (i, CILogout :=> Identity u)
+
+clientInputToInput ::
+  UserId ->
+  DSum ClientInput Identity ->
+  DSum Input Identity
+clientInputToInput i ci =
+  case ci of
+    CIMessage :=> Identity mb -> IMessage :=> Identity (i, mb)
+    CINotification :=> Identity r -> INotification :=> Identity (i, r)
+    CILogout :=> Identity u -> ILogout :=> Identity (i, u)
+
+data Output a where
+  OLogin        :: Output UserId
+  OMessage      :: Output ()
+  ONotification :: Output Response
+  OLogout       :: Output ()
+
+data ClientOutput a where
+  COMessage      :: ClientOutput ()
+  CONotification :: ClientOutput Response
+  COLogout       :: ClientOutput ()
+
+outputToClientOutput ::
+  DSum Output Identity ->
+  Maybe (DSum ClientOutput Identity)
+outputToClientOutput o =
+  case o of
+    OLogin :=> _ -> Nothing
+    OMesssage :=> Identity u -> Just (COMessage :=> Identity u)
+    ONotification :=> Identity r -> Just (CONotifcation :=> Identity r)
+    OLogout :=> Identity u -> Just (COLogout :=> Identity u)
+
+clientOutputToOutput ::
+  DSum ClientOutput Identity ->
+  DSum Output Identity
+clientOutputToOutput co =
+  case co of
+    COMessage :=> Identity u -> OMessage :=> Identity u
+    CONotification :=> Identity r -> ONotification :=> Identity r
+    COLogout :=> Identity u -> OLogout :=> Identity u
+
+data State = State Int (Map Int ClientState)
+
+data ClientState = ClientState
+
+check ::
+  Dynamic t State ->
+  Event t (DMap Input Identity) ->
+  m (Event t e, Event t (DMap Input Identity))
+check =
+  undefined
+
+checkClient ::
+  Dynamic t ClientState ->
+  Event t (DMap ClientInput Identity) ->
+  m (Event t e, Event t (DMap ClientInput Identity))
+checkClient =
+  undefined
+
+accumulate ::
+  Event t (DMap Input Identity) ->
+  m (Dynamic t State)
+accumulate =
+  undefined
+
+accumulateClient ::
+  Event t (DMap ClientInput Identity) ->
+  m (Dynamic t ClientState)
+accumulateClient =
+  undefined
+
+process ::
+  Dynamic t State ->
+  Event t (DMap Input Identity) ->
+  m (Event t e, Event t (DMap Output Identity))
+process =
+  undefined
+
+processClient ::
+  Dynamic t ClientState ->
+  Event t (DMap ClientInput Identity) ->
+  m (Event t e, Event t (DMap ClientOutput Identity))
+processClient =
+  undefined
+-}
+

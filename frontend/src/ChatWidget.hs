@@ -145,7 +145,6 @@ displayNotification (MessageSent u m) =
 displayNotification (UserList us) =
   Text.pack . mconcat $ us
 
--- TODO send a list of users when a user first connects
 -- TODO disable the message input unless the ws is connected
 -- TODO have a scrollable message area to display notifications in arrival order
 

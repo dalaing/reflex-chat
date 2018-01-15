@@ -5,8 +5,8 @@ let
     reflex-server-wai = initialNixpkgs.pkgs.fetchFromGitHub {
       owner = "dalaing";
       repo = "reflex-server-wai";
-      rev = "f4a2a087041e2f12701b1b14c40c9905ebe5cb8c";
-      sha256 = "0gj4jjl3rrw0qkqjys3k1x35wnv559dqw3762bb1ndngca9zk1x4";
+      rev = "2ff8d9509b4714eb81960c699cb9cd920b568043";
+      sha256 = "0h2ld5ksdzbq51wi8sbzaswiy8ngmd4j0id134x621033y3s0kpb";
     };
   };
 in

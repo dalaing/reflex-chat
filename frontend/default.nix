@@ -6,7 +6,7 @@ let
   haskellPackages = reflex-platform.${compiler}.override {
     overrides = self: super: {
       common = import ../common { inherit reflex-platform compiler; };
-      servant-reflex = self.callCabal2nix "servant-reflex" (import ../servant-reflex.nix) {};
+      servant-reflex = pkgs.haskell.lib.doJailbreak (self.callCabal2nix "servant-reflex" (import ../servant-reflex.nix) {});
     };
   };
   drv = pkgs.haskell.lib.dontHaddock (haskellPackages.callPackage ./frontend.nix { });

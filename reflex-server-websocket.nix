@@ -5,8 +5,8 @@ let
     reflex-server-websocket = initialNixpkgs.pkgs.fetchFromGitHub {
       owner = "dalaing";
       repo = "reflex-server-websocket";
-      rev = "5e89164fc4121097f7f5058ac12c16f8e68bd3bd";
-      sha256 = "03swdhpbhb68fxa1cmyhsg42m7lxvsxr2vbr2z5l971vv1adsc9n";
+      rev = "2f9d6a3befaa3a938430ec0cd7179a442fe5276f";
+      sha256 = "0aiw7595jq4ff7x15hcarkmrmw3j3x6xvf8glrwyh935avk99jg3";
     };
   };
 in

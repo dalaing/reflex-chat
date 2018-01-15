@@ -16,30 +16,31 @@ library
   exposed-modules:     ChatWidget
   if !impl(ghcjs -any)
     exposed-modules:   Util.Run
-  build-depends:       base >=4.9 && <4.10
-                     , mtl
-                     , containers
-                     , text
-                     , bytestring
-                     , binary
-                     , lens
-                     , dependent-sum
-                     , dependent-map
-                     , reflex
-                     , reflex-dom-core
-                     , servant
-                     , servant-reflex
-                     , common
+  build-depends:       base            >= 4.9    && < 4.10
+                     , binary          >= 0.8    && < 0.9
+                     , bytestring      >= 0.10   && < 0.11
+                     , containers      >= 0.5    && < 0.6
+                     , dependent-map   >= 0.2    && < 0.3
+                     , dependent-sum   >= 0.4    && < 0.5
+                     , lens            >= 4.15.4 && < 4.16
+                     , mtl             >= 2.2    && < 2.3
+                     , reflex          >= 0.5    && < 0.6
+                     , reflex-dom-core >= 0.4    && < 0.5
+                     , servant         >= 0.11   && < 0.12
+                     , servant-auth    >= 0.3    && < 0.4
+                     , servant-reflex  >= 0.3    && < 0.4
+                     , text            >= 1.2    && < 1.3
+                     , common          >= 0.1.0 && < 0.2
   if !impl(ghcjs -any)
     build-depends:
-        filepath >=1.4 && <1.5
-      , directory >=1.3 && <1.4
-      , jsaddle
-      , jsaddle-warp
-      , wai >= 3.2 && < 3.3
-      , warp
-      , wai-middleware-static
-      , websockets
+        directory             >= 1.3    && < 1.4
+      , filepath              >= 1.4    && < 1.5
+      , jsaddle               >= 0.9    && < 0.10
+      , jsaddle-warp          >= 0.9    && < 0.10
+      , wai                   >= 3.2    && < 3.3
+      , wai-middleware-static >= 0.8    && < 0.9
+      , warp                  >= 3.2    && < 3.3
+      , websockets            >= 0.10   && < 0.11
   if impl(ghcjs -any)
     ghc-options:       -Wall -dedupe
     cpp-options:       -DGHCJS_BROWSER
@@ -48,12 +49,14 @@ library
   hs-source-dirs:      src
   default-language:    Haskell2010
 
+
+
 executable frontend
   if !impl(ghcjs -any)
     buildable: False
   main-is:             Main.hs
-  build-depends:       base >=4.9 && <4.10
-                     , reflex-dom-core
+  build-depends:       base            >= 4.9 && < 4.10
+                     , reflex-dom-core >= 0.4 && < 0.5
                      , frontend
   if impl(ghcjs -any)
     ghc-options:       -Wall -dedupe
@@ -62,3 +65,4 @@ executable frontend
     ghc-options:       -Wall
   hs-source-dirs:      exe
   default-language:    Haskell2010
+
